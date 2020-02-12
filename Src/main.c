@@ -1,14 +1,12 @@
 #include <string.h>
 #include "main.h"
 #include "cmsis_os.h"
-#include "data_types.h"
+#include "MNIST_input.h"
 #include "main_functions.h"
 #include "constants.h"
 #include "color.h"
 
 #ifdef __GNUC__
-/* With GCC, small printf (option LD Linker->Libraries->Small printf
-     set to 'Yes') calls __io_putchar() */
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #else
 #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
@@ -18,16 +16,10 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 void StartDefaultTask(void const *argument);
 void blink(void const *argument);
-void UARTTask(void const *argument);
 
 osThreadId defaultTaskHandle;
-osThreadId UARTTaskHandle;
 osThreadId blinkTaskHandle;
 
-/** FATFS SDFatFs; */
-/** FIL MyFile;  */
-/** char SDPath[4];  */
-/** static uint8_t buffer[_MAX_SS];  */
 UART_HandleTypeDef UartHandle;
 
 /**
@@ -44,17 +36,6 @@ PUTCHAR_PROTOTYPE
 	return ch;
 }
 
-void UARTTask(void const *argument)
-{
-	while (1) {
-		HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_SET);
-		HAL_Delay(500);
-		printf("Hello World\n");
-		HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_RESET);
-		HAL_Delay(500);
-	}
-}
-
 /**
   * @brief  Function implementing the defaultTask thread.
   * @param  argument: Not used 
@@ -62,30 +43,11 @@ void UARTTask(void const *argument)
   */
 void StartDefaultTask(void const *argument)
 {
-	/* USER CODE BEGIN 5 */
-	circle_t *tmp_circle;
-	int count = 0;
-	uint16_t screen_height = BSP_LCD_GetYSize();
-	uint16_t screen_width = BSP_LCD_GetXSize();
-	uint16_t x_pos, y_pos;
-	setup();
-	/* Infinite loop */
+	printf("Started\n");
+	/** setup(); */
 	for (;;) {
-		tmp_circle = loop();
-		if (tmp_circle) {
-			x_pos = (uint16_t)(tmp_circle->x * screen_width /
-					   (2 * PI));
-			y_pos = (uint16_t)((screen_height / 2) +
-					   tmp_circle->y * screen_height / 2);
-			BSP_LCD_FillCircle(x_pos, y_pos, tmp_circle->size);
-		}
-		count++;
-		if (count == 40)
-			vTaskSuspend(NULL);
-		else
-			HAL_Delay(100);
+		HAL_Delay(100);
 	}
-	/* USER CODE END 5 */
 }
 
 /**
@@ -202,14 +164,13 @@ int main(void)
 		Error_Handler();
 	}
 
+    printf("UART online\n");
+
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
 
 	osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 256);
 	defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-
-	osThreadDef(UARTTaskHandle, UARTTask, osPriorityNormal, 0, 256);
-	UARTTaskHandle = osThreadCreate(osThread(UARTTaskHandle), NULL);
 
 	osThreadDef(blinkTaskHandle, blink, osPriorityNormal, 0, 256);
 	blinkTaskHandle = osThreadCreate(osThread(blinkTaskHandle), NULL);
@@ -379,9 +340,5 @@ void Error_Handler(void)
   */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-	/* USER CODE BEGIN 6 */
-	/* User can add his own implementation to report the file name and line number,
-     tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-	/* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

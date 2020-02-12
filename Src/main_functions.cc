@@ -20,10 +20,8 @@ limitations under the License.
 
 #include "main_functions.h"
 
-#include "data_types.h"
-
 #include "constants.h"
-#include "sine_model_data.h"
+#include "model_data.h"
 // Globals, used for compatibility with Arduino-style sketches.
 namespace
 {
@@ -53,7 +51,7 @@ void setup()
 
 	// Map the model into a usable data structure. This doesn't involve any
 	// copying or parsing, it's a very lightweight operation.
-	model = tflite::GetModel(g_sine_model_data);
+	model = tflite::GetModel(MNIST_model2_quantized_pruned_tflite);
 	if (model->version() != TFLITE_SCHEMA_VERSION) {
 		error_reporter->Report(
 			"Model provided is schema version %d not equal "
@@ -89,12 +87,8 @@ void setup()
 }
 
 // The name of this function is important for Arduino compatibility.
-circle_t *loop()
+void loop()
 {
-	circle_t *ret = (circle_t *)malloc(sizeof(circle_t));
-	if (!ret)
-		return NULL;
-	ret->size = 4;
 	// Calculate an x value to feed into the model. We compare the current
 	// inference_count to the number of inferences per cycle to determine
 	// our position within the range of possible x values the model was
@@ -111,20 +105,14 @@ circle_t *loop()
 	if (invoke_status != kTfLiteOk) {
 		error_reporter->Report("Invoke failed on x_val: %f\n",
 				       static_cast<double>(x_val));
-		return NULL;
 	}
 
 	// Read the predicted y value from the model's output tensor
 	float y_val = output->data.f[0];
-
-	ret->x = x_val;
-	ret->y = y_val;
 
 	// Increment the inference_counter, and reset it if we have reached
 	// the total number per cycle
 	inference_count++;
 	if (inference_count >= kInferencesPerCycle)
 		inference_count = 0;
-
-	return ret;
 }
