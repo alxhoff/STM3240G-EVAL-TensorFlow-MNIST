@@ -38,9 +38,7 @@ PUTCHAR_PROTOTYPE
 
 #define INPUT_IMAGE_SIZE 28
 #define INPUT_BOX_THICKNESS 2
-#define INPUT_IMAGE_SIZE_PIXEL                                                 \
-	((int)((double)BSP_LCD_GetYSize() / INPUT_IMAGE_SIZE) *                \
-	 INPUT_IMAGE_SIZE)
+#define INPUT_IMAGE_SIZE_PIXEL 224
 #define INPUT_BOX_TOP_MARGIN                                                   \
 	((BSP_LCD_GetYSize() - INPUT_IMAGE_SIZE_PIXEL -                        \
 	  2 * INPUT_BOX_THICKNESS) /                                           \
@@ -59,28 +57,92 @@ PUTCHAR_PROTOTYPE
 #define RUN_BOX_HEIGHT 40
 #define RUN_BOX_Y (BSP_LCD_GetYSize() / 2 - (RUN_BOX_HEIGHT / 2))
 
-static uint32_t x = 0, y = 0;
 static TS_StateTypeDef TS_State;
-static uint8_t TSInputImage[INPUT_IMAGE_SIZE][INPUT_IMAGE_SIZE] = {0};
+static uint8_t TSInputImage[INPUT_IMAGE_SIZE_PIXEL][INPUT_IMAGE_SIZE_PIXEL] = {
+	0
+};
+uint32_t image_size = INPUT_IMAGE_SIZE;
 
-static void SaveInputImage(void){
-    volatile static uint16_t tmp = 0;
-    for(int y = INPUT_BOX_Y_INNER; y < (INPUT_BOX_Y_INNER + INPUT_IMAGE_SIZE_PIXEL); y++){
-        for(int x = INPUT_BOX_X_INNER; x < (INPUT_BOX_X_INNER + INPUT_IMAGE_SIZE_PIXEL); x++){
-            tmp = BSP_LCD_ReadPixel(x, y);
-        }
-    }
+uint8_t AverageImageBlock(uint8_t **image, uint32_t block_size, uint32_t x,
+			  uint32_t y)
+{
+	uint32_t ret = 0;
+
+	for (int i = 0; i < block_size; i++)
+		for (int j = 0; j < block_size; j++)
+			ret += image[y * block_size + i][x * block_size + j];
+
+	return ret / (block_size * block_size);
+}
+
+void ShrinkImage(uint8_t **image, uint32_t image_size)
+{
+	uint8_t scale_factor = INPUT_IMAGE_SIZE_PIXEL / image_size;
+
+	for (int y = 0; y < image_size; y++)
+		for (int x = 0; x < image_size; x++)
+			image[y][x] =
+				AverageImageBlock(image, scale_factor, x, y);
+}
+
+void ConvertGStoTrueColor(uint8_t **image, uint32_t image_size)
+{
+	for (int y = 0; y < image_size; y++)
+		for (int x = 0; x < image_size; x++) {
+			image[y][x] = (image[y][x] << 11) | (image[y][x] << 6) |
+				      image[y][x];
+		}
+}
+
+static void SendImageUART(void)
+{
+	char buffer[INPUT_IMAGE_SIZE_PIXEL + 1] = { '\0' };
+	for (int i = 0; i < INPUT_IMAGE_SIZE_PIXEL; i++) {
+		for (int j = 0; j < INPUT_IMAGE_SIZE_PIXEL; j++)
+			buffer[j] = TSInputImage[i][j];
+		printf("%s\n", buffer);
+	}
+}
+
+static void SaveInputImage(void)
+{
+    BSP_LCD_DrawPixel(8 , 8, 0);
+    volatile uint16_t test = BSP_LCD_ReadPixel(20,20);
+	static const int divisor = 256 / 32;
+	static volatile uint16_t tmp_pixel;
+	volatile int margin = INPUT_BOX_Y_INNER;
+	TSInputImage[0][0] = 1;
+	for (int y = 0; y < image_size; y++) {
+		for (int x = 0; x < image_size; x++) {
+			tmp_pixel = BSP_LCD_ReadPixel(x + margin, y + margin);
+            if(!tmp_pixel)
+                printf("%d: %d\n", x, y);
+			tmp_pixel = ((((tmp_pixel >> 11) & 0x1F) +
+				      ((tmp_pixel >> 5) & 0x1F) +
+				      (tmp_pixel & 0x1F)) /
+				     3 * divisor) &
+				    0xFF;
+			TSInputImage[y][x] = (uint8_t)tmp_pixel;
+		}
+	}
+
+	/** SendImageUART(); */
+	ShrinkImage(TSInputImage, image_size);
+	ConvertGStoTrueColor(TSInputImage, INPUT_IMAGE_SIZE);
+
+	BSP_LCD_Clear(LCD_COLOR_WHITE);
+	for (int i = 0; i < INPUT_IMAGE_SIZE; i++)
+		for (int j = 0; j < INPUT_IMAGE_SIZE; j++)
+			BSP_LCD_DrawPixel(j, i, TSInputImage[i][j]);
 }
 
 uint8_t RunButtonPressed(uint32_t x, uint32_t y)
 {
-    if(
-        (x >= RUN_BOX_X) && (x <= (RUN_BOX_X + RUN_BOX_WIDTH)) &&
-        (y >= RUN_BOX_Y) && (y <= (RUN_BOX_Y + RUN_BOX_HEIGHT))
-            )
-        return 1;
+	if ((x >= RUN_BOX_X) && (x <= (RUN_BOX_X + RUN_BOX_WIDTH)) &&
+	    (y >= RUN_BOX_Y) && (y <= (RUN_BOX_Y + RUN_BOX_HEIGHT)))
+		return 1;
 
-    return 0;
+	return 0;
 }
 
 uint8_t DrawInBox(uint32_t x, uint32_t y, uint32_t dot_radius)
@@ -99,7 +161,8 @@ uint8_t DrawInBox(uint32_t x, uint32_t y, uint32_t dot_radius)
 
 void DrawTouchInput(void)
 {
-	static const uint32_t dot_radius = 5;
+	static const uint32_t dot_radius = 2;
+	static uint32_t x = 0, y = 0;
 
 	BSP_TS_GetState(&TS_State);
 
@@ -107,14 +170,12 @@ void DrawTouchInput(void)
 		x = TS_State.x;
 		y = TS_State.y;
 
-		if (DrawInBox(x, y, dot_radius)){
-            printf("Drawing in box\n");
+		if (DrawInBox(x, y, dot_radius)) {
 			BSP_LCD_FillCircle(x, y, dot_radius);
-        }
-        else if(RunButtonPressed(x, y)){
-            printf("Save image\n");
-            SaveInputImage();
-        }
+		} else if (RunButtonPressed(x, y)) {
+			printf("Save image\n");
+			SaveInputImage();
+		}
 	}
 }
 
@@ -146,12 +207,12 @@ void DrawInputScreen(void)
   */
 void StartDefaultTask(void const *argument)
 {
-    DrawInputScreen();
+	DrawInputScreen();
 
 	printf("Started\n");
 	/** setup(); */
 	for (;;) {
-        DrawTouchInput();
+		DrawTouchInput();
 		HAL_Delay(1);
 	}
 }
@@ -216,7 +277,6 @@ void blink(void const *argument)
 
 int main(void)
 {
-
 	/* MCU Configuration--------------------------------------------------------*/
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
@@ -239,8 +299,8 @@ int main(void)
 	/** BSP_LCD_DisplayStringAt(210, (BSP_LCD_GetYSize() - 55), */
 	/**             (uint8_t *)hello_str, LEFT_MODE); */
 
-    Touchscreen_Calibration();
-    BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
+	Touchscreen_Calibration();
+	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 
 	/*Link the SD Card disk I/O driver ###################################*/
 	/** if (FATFS_LinkDriver(&SD_Driver, SDPath) != 0) { */
@@ -272,12 +332,12 @@ int main(void)
 		Error_Handler();
 	}
 
-    printf("UART online\n");
+	printf("UART online\n");
 
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
 
-	osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 256);
+	osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 1000);
 	defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
 	osThreadDef(blinkTaskHandle, blink, osPriorityNormal, 0, 256);
