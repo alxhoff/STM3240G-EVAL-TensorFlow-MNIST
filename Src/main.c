@@ -58,39 +58,67 @@ PUTCHAR_PROTOTYPE
 #define RUN_BOX_Y (BSP_LCD_GetYSize() / 2 - (RUN_BOX_HEIGHT / 2))
 
 static TS_StateTypeDef TS_State;
-static uint8_t TSInputImage[INPUT_IMAGE_SIZE_PIXEL][INPUT_IMAGE_SIZE_PIXEL] = {
+static uint16_t TSInputImage[INPUT_IMAGE_SIZE_PIXEL][INPUT_IMAGE_SIZE_PIXEL] = {
 	0
 };
-uint32_t image_size = INPUT_IMAGE_SIZE;
+static const uint32_t image_size = INPUT_IMAGE_SIZE;
+static const uint32_t image_size_pixel = INPUT_IMAGE_SIZE_PIXEL;
 
-uint8_t AverageImageBlock(uint8_t **image, uint32_t block_size, uint32_t x,
-			  uint32_t y)
+uint16_t AverageImageBlock( uint32_t block_size, uint32_t x, uint32_t y)
 {
-	uint32_t ret = 0;
+	uint32_t ret[3] = {0};
+    volatile uint16_t ret_val;
 
 	for (int i = 0; i < block_size; i++)
-		for (int j = 0; j < block_size; j++)
-			ret += image[y * block_size + i][x * block_size + j];
+		for (int j = 0; j < block_size; j++) {
+			ret[0] += TSInputImage[y * block_size + i]
+					      [x * block_size + j] &
+				  0x1F;
+			ret[1] += (TSInputImage[y * block_size + i]
+					       [x * block_size + j] >>
+				   5) &
+				  0x3F;
+			ret[2] += (TSInputImage[y * block_size + i]
+					       [x * block_size + j] >>
+				   11) &
+				  0x1F;
+		}
 
-	return ret / (block_size * block_size);
+
+	ret_val =  (((ret[0] / (block_size * block_size)) & 0x1F) |
+		(((ret[1] / (block_size * block_size)) & 0x3F) << 5) |
+		(((ret[2] / (block_size * block_size)) & 0x1F) << 11));
+    return ret_val;
 }
 
-void ShrinkImage(uint8_t **image, uint32_t image_size)
+void ShrinkImage(void)
 {
-	uint8_t scale_factor = INPUT_IMAGE_SIZE_PIXEL / image_size;
+	uint8_t scale_factor = image_size_pixel / image_size;
+    volatile uint16_t tmp;
 
 	for (int y = 0; y < image_size; y++)
-		for (int x = 0; x < image_size; x++)
-			image[y][x] =
-				AverageImageBlock(image, scale_factor, x, y);
+		for (int x = 0; x < image_size; x++){
+            tmp = AverageImageBlock(scale_factor, x, y);
+			TSInputImage[y][x] =
+				AverageImageBlock(scale_factor, x, y);
+        }
 }
 
-void ConvertGStoTrueColor(uint8_t **image, uint32_t image_size)
+void ConvertGStoTrueColor(void)
 {
+	static const int divisor = 256 / 32;
 	for (int y = 0; y < image_size; y++)
 		for (int x = 0; x < image_size; x++) {
-			image[y][x] = (image[y][x] << 11) | (image[y][x] << 6) |
-				      image[y][x];
+			static volatile uint16_t tmp_pixel;
+			volatile uint8_t first = (tmp_pixel >> 11) & 0x1F;
+			volatile uint8_t second = (tmp_pixel >> 5) & 0x3F;
+			volatile uint8_t third = tmp_pixel & 0x1F;
+			tmp_pixel = ((((tmp_pixel >> 11) & 0x1F) +
+				      ((tmp_pixel >> 5) & 0x1F) +
+				      (tmp_pixel & 0x1F)) /
+				     3 * divisor) &
+				    0xFF;
+			TSInputImage[y][x] = tmp_pixel;
 		}
 }
 
@@ -104,36 +132,33 @@ static void SendImageUART(void)
 	}
 }
 
-static void SaveInputImage(void)
+static void DrawShrunkImage(void)
 {
-    BSP_LCD_DrawPixel(8 , 8, 0);
-    volatile uint16_t test = BSP_LCD_ReadPixel(20,20);
-	static const int divisor = 256 / 32;
-	static volatile uint16_t tmp_pixel;
-	volatile int margin = INPUT_BOX_Y_INNER;
-	TSInputImage[0][0] = 1;
-	for (int y = 0; y < image_size; y++) {
-		for (int x = 0; x < image_size; x++) {
-			tmp_pixel = BSP_LCD_ReadPixel(x + margin, y + margin);
-            if(!tmp_pixel)
-                printf("%d: %d\n", x, y);
-			tmp_pixel = ((((tmp_pixel >> 11) & 0x1F) +
-				      ((tmp_pixel >> 5) & 0x1F) +
-				      (tmp_pixel & 0x1F)) /
-				     3 * divisor) &
-				    0xFF;
-			TSInputImage[y][x] = (uint8_t)tmp_pixel;
-		}
-	}
-
-	/** SendImageUART(); */
-	ShrinkImage(TSInputImage, image_size);
-	ConvertGStoTrueColor(TSInputImage, INPUT_IMAGE_SIZE);
-
 	BSP_LCD_Clear(LCD_COLOR_WHITE);
 	for (int i = 0; i < INPUT_IMAGE_SIZE; i++)
 		for (int j = 0; j < INPUT_IMAGE_SIZE; j++)
 			BSP_LCD_DrawPixel(j, i, TSInputImage[i][j]);
+}
+
+static void SaveInputImage(void)
+{
+	volatile int margin = INPUT_BOX_Y_INNER;
+	TSInputImage[0][0] = 1;
+	for (int y = 0; y < image_size_pixel; y++) {
+		for (int x = 0; x < image_size_pixel; x++) {
+			TSInputImage[y][x] =
+				BSP_LCD_ReadPixel(x + margin, y + margin);
+			/** if (!tmp_pixel) */
+			/**     printf("%d: %d\n", x, y); */
+		}
+	}
+
+	/** SendImageUART(); */
+	ShrinkImage();
+
+	DrawShrunkImage();
+
+	ConvertGStoTrueColor();
 }
 
 uint8_t RunButtonPressed(uint32_t x, uint32_t y)
