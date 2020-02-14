@@ -87,32 +87,19 @@ void setup()
 }
 
 // The name of this function is important for Arduino compatibility.
-void loop()
+char loop(uint8_t *img, uint32_t size)
 {
-	// Calculate an x value to feed into the model. We compare the current
-	// inference_count to the number of inferences per cycle to determine
-	// our position within the range of possible x values the model was
-	// trained on, and use this to calculate a value.
-	float position = static_cast<float>(inference_count) /
-			 static_cast<float>(kInferencesPerCycle);
-	float x_val = position * kXrange;
-
+    static TfLiteStatus invoke_status;
 	// Place our calculated x value in the model's input tensor
-	input->data.f[0] = x_val;
+    for(int i = 0; i < size; i++)
+        input->data.f[i] = img[i];
 
 	// Run inference, and report any error
-	TfLiteStatus invoke_status = interpreter->Invoke();
+	invoke_status = interpreter->Invoke();
 	if (invoke_status != kTfLiteOk) {
-		error_reporter->Report("Invoke failed on x_val: %f\n",
-				       static_cast<double>(x_val));
+		error_reporter->Report("Invoke failed");
 	}
 
 	// Read the predicted y value from the model's output tensor
-	float y_val = output->data.f[0];
-
-	// Increment the inference_counter, and reset it if we have reached
-	// the total number per cycle
-	inference_count++;
-	if (inference_count >= kInferencesPerCycle)
-		inference_count = 0;
+	return (char) output->data.f[0];
 }

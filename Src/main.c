@@ -61,13 +61,13 @@ static TS_StateTypeDef TS_State;
 static uint16_t TSInputImage[INPUT_IMAGE_SIZE_PIXEL][INPUT_IMAGE_SIZE_PIXEL] = {
 	0
 };
+static uint8_t NNInputImage[INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE];
 static const uint32_t image_size = INPUT_IMAGE_SIZE;
 static const uint32_t image_size_pixel = INPUT_IMAGE_SIZE_PIXEL;
 
-uint16_t AverageImageBlock( uint32_t block_size, uint32_t x, uint32_t y)
+uint16_t AverageImageBlock(uint32_t block_size, uint32_t x, uint32_t y)
 {
-	uint32_t ret[3] = {0};
-    volatile uint16_t ret_val;
+	uint32_t ret[3] = { 0 };
 
 	for (int i = 0; i < block_size; i++)
 		for (int j = 0; j < block_size; j++) {
@@ -84,39 +84,34 @@ uint16_t AverageImageBlock( uint32_t block_size, uint32_t x, uint32_t y)
 				  0x1F;
 		}
 
-
-	ret_val =  (((ret[0] / (block_size * block_size)) & 0x1F) |
+	return (((ret[0] / (block_size * block_size)) & 0x1F) |
 		(((ret[1] / (block_size * block_size)) & 0x3F) << 5) |
 		(((ret[2] / (block_size * block_size)) & 0x1F) << 11));
-    return ret_val;
 }
 
 void ShrinkImage(void)
 {
 	uint8_t scale_factor = image_size_pixel / image_size;
-    volatile uint16_t tmp;
 
 	for (int y = 0; y < image_size; y++)
-		for (int x = 0; x < image_size; x++){
-            tmp = AverageImageBlock(scale_factor, x, y);
+		for (int x = 0; x < image_size; x++) {
 			TSInputImage[y][x] =
 				AverageImageBlock(scale_factor, x, y);
-        }
+		}
 }
 
 void ConvertGStoTrueColor(void)
 {
+	static uint16_t tmp_pixel;
 	static const int divisor = 256 / 32;
 	for (int y = 0; y < image_size; y++)
 		for (int x = 0; x < image_size; x++) {
-			static volatile uint16_t tmp_pixel;
-			volatile uint8_t first = (tmp_pixel >> 11) & 0x1F;
-			volatile uint8_t second = (tmp_pixel >> 5) & 0x3F;
-			volatile uint8_t third = tmp_pixel & 0x1F;
-			tmp_pixel = ((((tmp_pixel >> 11) & 0x1F) +
-				      ((tmp_pixel >> 5) & 0x1F) +
-				      (tmp_pixel & 0x1F)) /
-				     3 * divisor) &
+			tmp_pixel = TSInputImage[y][x];
+			tmp_pixel = (((((tmp_pixel >> 11) & 0x1F) +
+				       ((tmp_pixel >> 5) & 0x1F) +
+				       (tmp_pixel & 0x1F) + 3) /
+				      3 * divisor) -
+				     1) &
 				    0xFF;
 			TSInputImage[y][x] = tmp_pixel;
 		}
@@ -124,12 +119,16 @@ void ConvertGStoTrueColor(void)
 
 static void SendImageUART(void)
 {
-	char buffer[INPUT_IMAGE_SIZE_PIXEL + 1] = { '\0' };
-	for (int i = 0; i < INPUT_IMAGE_SIZE_PIXEL; i++) {
-		for (int j = 0; j < INPUT_IMAGE_SIZE_PIXEL; j++)
-			buffer[j] = TSInputImage[i][j];
+	char buffer[INPUT_IMAGE_SIZE * 2 + 1] = { '\0' };
+    printf("**********IMAGE START**********\n");
+	for (int i = 0; i < image_size; i++) {
+		for (int j = 0; j < image_size; j++){
+			buffer[j * 2] = TSInputImage[i][j];
+            buffer[j * 2 + 1] = ' ';
+        }
 		printf("%s\n", buffer);
 	}
+    printf("**********IMAGE STOP**********\n");
 }
 
 static void DrawShrunkImage(void)
@@ -148,17 +147,19 @@ static void SaveInputImage(void)
 		for (int x = 0; x < image_size_pixel; x++) {
 			TSInputImage[y][x] =
 				BSP_LCD_ReadPixel(x + margin, y + margin);
-			/** if (!tmp_pixel) */
-			/**     printf("%d: %d\n", x, y); */
 		}
 	}
 
-	/** SendImageUART(); */
 	ShrinkImage();
 
 	DrawShrunkImage();
 
 	ConvertGStoTrueColor();
+	
+    SendImageUART();
+
+    for(int i = 0; i < INPUT_IMAGE_SIZE; i++)
+        memcpy(&NNInputImage[i], &TSInputImage[i], INPUT_IMAGE_SIZE * sizeof(uint8_t));
 }
 
 uint8_t RunButtonPressed(uint32_t x, uint32_t y)
@@ -200,6 +201,7 @@ void DrawTouchInput(void)
 		} else if (RunButtonPressed(x, y)) {
 			printf("Save image\n");
 			SaveInputImage();
+            loop((uint8_t*)NNInputImage, INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE);
 		}
 	}
 }
@@ -235,7 +237,7 @@ void StartDefaultTask(void const *argument)
 	DrawInputScreen();
 
 	printf("Started\n");
-	/** setup(); */
+    setup();
 	for (;;) {
 		DrawTouchInput();
 		HAL_Delay(1);
