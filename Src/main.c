@@ -1,7 +1,6 @@
 #include <string.h>
 #include "main.h"
 #include "cmsis_os.h"
-#include "MNIST_input.h"
 #include "main_functions.h"
 #include "constants.h"
 #include "color.h"

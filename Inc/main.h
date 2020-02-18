@@ -14,8 +14,8 @@ extern "C" {
 #include <stdlib.h>
 #include <stdio.h>
 /* FatFs includes component */
-#include "ff_gen_drv.h"
-#include "sd_diskio.h"
+// #include "ff_gen_drv.h"
+// #include "sd_diskio.h"
 
 #define USARTx USART3
 #define USARTx_CLK_ENABLE() __HAL_RCC_USART3_CLK_ENABLE();

@@ -21,7 +21,7 @@ limitations under the License.
 #ifndef TENSORFLOW_LITE_MICRO_EXAMPLES_HELLO_WORLD_SINE_MODEL_DATA_H_
 #define TENSORFLOW_LITE_MICRO_EXAMPLES_HELLO_WORLD_SINE_MODEL_DATA_H_
 
-extern const unsigned char MNIST_model2_quantized_pruned_tflite[];
-extern const int MNIST_model2_quantized_pruned_tflite_len;
+extern const unsigned char model_data_tflite[];
+extern const unsigned int model_data_tflite_len;
 
 #endif  // TENSORFLOW_LITE_MICRO_EXAMPLES_HELLO_WORLD_SINE_MODEL_DATA_H_

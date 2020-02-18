@@ -51,7 +51,7 @@ void setup()
 
 	// Map the model into a usable data structure. This doesn't involve any
 	// copying or parsing, it's a very lightweight operation.
-	model = tflite::GetModel(MNIST_model2_quantized_pruned_tflite);
+	model = tflite::GetModel(model_data_tflite);
 	if (model->version() != TFLITE_SCHEMA_VERSION) {
 		error_reporter->Report(
 			"Model provided is schema version %d not equal "
@@ -60,9 +60,7 @@ void setup()
 		return;
 	}
 
-	// This pulls in all the operation implementations we need.
-	// NOLINTNEXTLINE(runtime-global-variables)
-	static tflite::ops::micro::AllOpsResolver resolver;
+    static tflite::MicroOpResolver<> resolver;
 
 	// Build an interpreter to run the model with.
 	static tflite::MicroInterpreter static_interpreter(model, resolver,
@@ -89,10 +87,10 @@ void setup()
 // The name of this function is important for Arduino compatibility.
 char loop(uint8_t *img, uint32_t size)
 {
-    static TfLiteStatus invoke_status;
+	static TfLiteStatus invoke_status;
 	// Place our calculated x value in the model's input tensor
-    for(int i = 0; i < size; i++)
-        input->data.f[i] = img[i];
+	for (int i = 0; i < size; i++)
+		input->data.f[i] = img[i];
 
 	// Run inference, and report any error
 	invoke_status = interpreter->Invoke();
@@ -101,5 +99,5 @@ char loop(uint8_t *img, uint32_t size)
 	}
 
 	// Read the predicted y value from the model's output tensor
-	return (char) output->data.f[0];
+	return (char)output->data.f[0];
 }

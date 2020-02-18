@@ -293,8 +293,8 @@ ELSE()
 
 ENDIF()
 
-MESSAGE(STATUS "TF Lite Sources: ${TensorFlowLite_SOURCES}")
-MESSAGE(STATUS "TF Lite Include Dirs: ${TensorFlowLite_INCLUDE_DIRS}")
+# MESSAGE(STATUS "TF Lite Sources: ${TensorFlowLite_SOURCES}")
+# MESSAGE(STATUS "TF Lite Include Dirs: ${TensorFlowLite_INCLUDE_DIRS}")
 
 INCLUDE(FindPackageHandleStandardArgs)
 
