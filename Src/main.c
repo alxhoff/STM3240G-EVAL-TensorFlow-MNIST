@@ -188,6 +188,7 @@ void DrawTouchInput(void)
 {
 	static const uint32_t dot_radius = 2;
 	static uint32_t x = 0, y = 0;
+    static char ret_char;
 
 	BSP_TS_GetState(&TS_State);
 
@@ -200,7 +201,7 @@ void DrawTouchInput(void)
 		} else if (RunButtonPressed(x, y)) {
 			printf("Save image\n");
 			SaveInputImage();
-            loop((uint8_t*)NNInputImage, INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE);
+            ret_char = loop((uint8_t*)NNInputImage, INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE);
 		}
 	}
 }
@@ -325,7 +326,7 @@ int main(void)
 	/** BSP_LCD_DisplayStringAt(210, (BSP_LCD_GetYSize() - 55), */
 	/**             (uint8_t *)hello_str, LEFT_MODE); */
 
-	Touchscreen_Calibration();
+	/** Touchscreen_Calibration(); */
 	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 
 	/*Link the SD Card disk I/O driver ###################################*/

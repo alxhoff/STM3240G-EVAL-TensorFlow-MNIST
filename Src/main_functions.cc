@@ -12,7 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-#include "tensorflow/lite/micro/kernels/all_ops_resolver.h"
+#include "tensorflow/lite/micro/kernels/micro_ops.h"
+#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
@@ -60,7 +61,15 @@ void setup()
 		return;
 	}
 
-    static tflite::MicroOpResolver<> resolver;
+    static tflite::MicroOpResolver<4> resolver;
+    resolver.AddBuiltin(tflite::BuiltinOperator_DEPTHWISE_CONV_2D,
+            tflite::ops::micro::Register_DEPTHWISE_CONV_2D());
+    resolver.AddBuiltin(tflite::BuiltinOperator_MAX_POOL_2D,
+            tflite::ops::micro::Register_MAX_POOL_2D());
+    resolver.AddBuiltin(tflite::BuiltinOperator_FULLY_CONNECTED,
+            tflite::ops::micro::Register_FULLY_CONNECTED(), 1, 3);
+    resolver.AddBuiltin(tflite::BuiltinOperator_SOFTMAX,
+            tflite::ops::micro::Register_SOFTMAX());
 
 	// Build an interpreter to run the model with.
 	static tflite::MicroInterpreter static_interpreter(model, resolver,
@@ -89,7 +98,7 @@ char loop(uint8_t *img, uint32_t size)
 {
 	static TfLiteStatus invoke_status;
 	// Place our calculated x value in the model's input tensor
-	for (int i = 0; i < size; i++)
+	for (uint32_t i = 0; i < size; i++)
 		input->data.f[i] = img[i];
 
 	// Run inference, and report any error
@@ -99,5 +108,5 @@ char loop(uint8_t *img, uint32_t size)
 	}
 
 	// Read the predicted y value from the model's output tensor
-	return (char)output->data.f[0];
+	return (char)output->data.f[0] + 48;
 }
