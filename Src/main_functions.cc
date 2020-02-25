@@ -14,14 +14,13 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/lite/micro/kernels/micro_ops.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
+// #include "tensorflow/lite/micro/kernels/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_error_reporter.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/version.h"
 
 #include "main_functions.h"
-
-#include "constants.h"
 #include "model_data.h"
 // Globals, used for compatibility with Arduino-style sketches.
 namespace
@@ -36,7 +35,7 @@ int inference_count = 0;
 // Create an area of memory to use for input, output, and intermediate arrays.
 // Finding the minimum value for your model may require some trial and error.
 constexpr int kTensorArenaSize = 2 * 1024;
-uint8_t tensor_arena[kTensorArenaSize];
+uint8_t tensor_arena[kTensorArenaSize] = {0};
 } // namespace
 
 // The name of this function is important for Arduino compatibility.
@@ -61,15 +60,16 @@ void setup()
 		return;
 	}
 
-    static tflite::MicroOpResolver<4> resolver;
+    static tflite::MicroMutableOpResolver resolver;
     resolver.AddBuiltin(tflite::BuiltinOperator_DEPTHWISE_CONV_2D,
             tflite::ops::micro::Register_DEPTHWISE_CONV_2D());
     resolver.AddBuiltin(tflite::BuiltinOperator_MAX_POOL_2D,
             tflite::ops::micro::Register_MAX_POOL_2D());
     resolver.AddBuiltin(tflite::BuiltinOperator_FULLY_CONNECTED,
-            tflite::ops::micro::Register_FULLY_CONNECTED(), 1, 3);
+            tflite::ops::micro::Register_FULLY_CONNECTED(), 1, 4);
     resolver.AddBuiltin(tflite::BuiltinOperator_SOFTMAX,
             tflite::ops::micro::Register_SOFTMAX());
+    
 
 	// Build an interpreter to run the model with.
 	static tflite::MicroInterpreter static_interpreter(model, resolver,
