@@ -16,6 +16,8 @@ static void MX_GPIO_Init(void);
 void StartDefaultTask(void const *argument);
 void blink(void const *argument);
 
+signed char prev_value = -1;
+
 osThreadId defaultTaskHandle;
 osThreadId blinkTaskHandle;
 
@@ -47,6 +49,7 @@ PUTCHAR_PROTOTYPE
 #define INPUT_BOX_X_INNER INPUT_BOX_SIDE_MARGIN + INPUT_BOX_THICKNESS
 #define INPUT_BOX_Y_OUTER INPUT_BOX_SIDE_MARGIN
 #define INPUT_BOX_Y_INNER INPUT_BOX_SIDE_MARGIN + INPUT_BOX_THICKNESS
+#define INPUT_BOX_WIDTH (INPUT_IMAGE_SIZE_PIXEL + 2 * INPUT_BOX_THICKNESS)
 #define RUN_BOX_WIDTH                                                          \
 	(BSP_LCD_GetXSize() - INPUT_IMAGE_SIZE_PIXEL -                         \
 	 3 * INPUT_BOX_TOP_MARGIN - 2 * INPUT_BOX_THICKNESS)
@@ -119,15 +122,15 @@ void ConvertGStoTrueColor(void)
 static void SendImageUART(void)
 {
 	char buffer[INPUT_IMAGE_SIZE * 2 + 1] = { '\0' };
-    printf("**********IMAGE START**********\n");
+	printf("**********IMAGE START**********\n");
 	for (int i = 0; i < image_size; i++) {
-		for (int j = 0; j < image_size; j++){
+		for (int j = 0; j < image_size; j++) {
 			buffer[j * 2] = TSInputImage[i][j];
-            buffer[j * 2 + 1] = ' ';
-        }
+			buffer[j * 2 + 1] = ' ';
+		}
 		printf("%s\n", buffer);
 	}
-    printf("**********IMAGE STOP**********\n");
+	printf("**********IMAGE STOP**********\n");
 }
 
 static void DrawShrunkImage(void)
@@ -154,11 +157,12 @@ static void SaveInputImage(void)
 	DrawShrunkImage();
 
 	ConvertGStoTrueColor();
-	
-    SendImageUART();
 
-    for(int i = 0; i < INPUT_IMAGE_SIZE; i++)
-        memcpy(&NNInputImage[i], &TSInputImage[i], INPUT_IMAGE_SIZE * sizeof(uint8_t));
+	SendImageUART();
+
+	for (int i = 0; i < INPUT_IMAGE_SIZE; i++)
+		memcpy(&NNInputImage[i], &TSInputImage[i],
+		       INPUT_IMAGE_SIZE * sizeof(uint8_t));
 }
 
 uint8_t RunButtonPressed(uint32_t x, uint32_t y)
@@ -184,11 +188,39 @@ uint8_t DrawInBox(uint32_t x, uint32_t y, uint32_t dot_radius)
 	return 1;
 }
 
+void DrawInputScreen(void)
+{
+	BSP_LCD_SetFont(&Font16);
+	BSP_LCD_Clear(LCD_COLOR_WHITE);
+	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+	BSP_LCD_FillRect(INPUT_BOX_X_OUTER, INPUT_BOX_Y_OUTER, INPUT_BOX_WIDTH,
+			 INPUT_BOX_WIDTH);
+	BSP_LCD_FillRect(RUN_BOX_X, RUN_BOX_Y, RUN_BOX_WIDTH, RUN_BOX_HEIGHT);
+	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+	BSP_LCD_FillRect(INPUT_BOX_X_INNER, INPUT_BOX_Y_INNER,
+			 INPUT_IMAGE_SIZE_PIXEL, INPUT_IMAGE_SIZE_PIXEL);
+	BSP_LCD_FillRect(RUN_BOX_X + INPUT_BOX_THICKNESS,
+			 RUN_BOX_Y + INPUT_BOX_THICKNESS,
+			 RUN_BOX_WIDTH - 2 * INPUT_BOX_THICKNESS,
+			 RUN_BOX_HEIGHT - 2 * INPUT_BOX_THICKNESS);
+	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+	BSP_LCD_DisplayStringAt(RUN_BOX_X + 20, RUN_BOX_Y + 12,
+				(uint8_t *)"RUN", LEFT_MODE);
+	if (prev_value != -1){
+		BSP_LCD_DisplayStringAt(INPUT_BOX_X_OUTER + INPUT_BOX_WIDTH + 10,
+					INPUT_BOX_Y_OUTER, (uint8_t *)"RESULT",
+					LEFT_MODE);
+        char buf[2];
+        sprintf(buf, "%c", prev_value);
+        BSP_LCD_DisplayStringAt(INPUT_BOX_X_OUTER + INPUT_BOX_WIDTH + 35,
+                INPUT_BOX_Y_OUTER + 15, (uint8_t *)buf, LEFT_MODE);
+    }
+}
+
 void DrawTouchInput(void)
 {
 	static const uint32_t dot_radius = 2;
 	static uint32_t x = 0, y = 0;
-    static char ret_char;
 
 	BSP_TS_GetState(&TS_State);
 
@@ -201,30 +233,11 @@ void DrawTouchInput(void)
 		} else if (RunButtonPressed(x, y)) {
 			printf("Save image\n");
 			SaveInputImage();
-            ret_char = loop((uint8_t*)NNInputImage, INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE);
+			prev_value = loop((uint8_t *)NNInputImage,
+					  INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE);
+			DrawInputScreen();
 		}
 	}
-}
-
-void DrawInputScreen(void)
-{
-	BSP_LCD_SetFont(&Font16);
-	BSP_LCD_Clear(LCD_COLOR_WHITE);
-	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-	BSP_LCD_FillRect(INPUT_BOX_X_OUTER, INPUT_BOX_Y_OUTER,
-			 INPUT_IMAGE_SIZE_PIXEL + 2 * INPUT_BOX_THICKNESS,
-			 INPUT_IMAGE_SIZE_PIXEL + 2 * INPUT_BOX_THICKNESS);
-	BSP_LCD_FillRect(RUN_BOX_X, RUN_BOX_Y, RUN_BOX_WIDTH, RUN_BOX_HEIGHT);
-	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-	BSP_LCD_FillRect(INPUT_BOX_X_INNER, INPUT_BOX_Y_INNER,
-			 INPUT_IMAGE_SIZE_PIXEL, INPUT_IMAGE_SIZE_PIXEL);
-	BSP_LCD_FillRect(RUN_BOX_X + INPUT_BOX_THICKNESS,
-			 RUN_BOX_Y + INPUT_BOX_THICKNESS,
-			 RUN_BOX_WIDTH - 2 * INPUT_BOX_THICKNESS,
-			 RUN_BOX_HEIGHT - 2 * INPUT_BOX_THICKNESS);
-	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-	BSP_LCD_DisplayStringAt(RUN_BOX_X + 20, RUN_BOX_Y + 12,
-				(uint8_t *)"RUN", LEFT_MODE);
 }
 
 /**
@@ -237,7 +250,7 @@ void StartDefaultTask(void const *argument)
 	DrawInputScreen();
 
 	printf("Started\n");
-    setup();
+	setup();
 	for (;;) {
 		DrawTouchInput();
 		HAL_Delay(1);
