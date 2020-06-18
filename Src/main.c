@@ -1,4 +1,5 @@
 #include <string.h>
+#include <math.h>
 #include "main.h"
 #include "cmsis_os.h"
 #include "main_functions.h"
@@ -58,7 +59,7 @@ PUTCHAR_PROTOTYPE
 	(INPUT_BOX_SIDE_MARGIN * 2 + INPUT_BOX_THICKNESS * 2 +                 \
 	 INPUT_IMAGE_SIZE_PIXEL)
 #define RUN_BOX_HEIGHT 40
-#define RUN_BOX_Y (BSP_LCD_GetYSize() / 2 - (RUN_BOX_HEIGHT / 2))
+#define RUN_BOX_Y (BSP_LCD_GetYSize() - 7 - (RUN_BOX_HEIGHT))
 
 static TS_StateTypeDef TS_State;
 static uint16_t TSInputImage[INPUT_IMAGE_SIZE_PIXEL][INPUT_IMAGE_SIZE_PIXEL] = {
@@ -105,12 +106,12 @@ void ShrinkImage(void)
 
 uint8_t ConvertHighColorToGS(uint16_t pixel)
 {
-    uint8_t r = pixel >> 11 & 0x1F;
-    uint8_t g = pixel >> 5 & 0x3F;
-    uint8_t b = pixel & 0x1F;
-    uint8_t luminance = (r + g + b) / 3;
-    uint8_t gs = luminance * (255 / 41.0);
-    return gs;
+	uint8_t r = pixel >> 11 & 0x1F;
+	uint8_t g = pixel >> 5 & 0x3F;
+	uint8_t b = pixel & 0x1F;
+	uint8_t luminance = (r + g + b) / 3;
+	uint8_t gs = luminance * (255 / 41.0);
+	return gs;
 }
 
 static void SendImageUART(void)
@@ -216,10 +217,36 @@ void DrawInputScreen(void)
 	}
 }
 
+char determine_char(float *out_array)
+{
+	int index = 0;
+	float max_val = out_array[index];
+
+	for (int i = 1; i < 10; i++)
+		if (out_array[i] > max_val) {
+			index = i;
+			max_val = out_array[i];
+		}
+
+	return (char)index + 48;
+}
+
+void printPercentages(float *output_array)
+{
+	char buff[10] = { 0 };
+	for (int i = 0; i < 11; i++) {
+		sprintf(buff, "%d: %d%%", i, (int)round(output_array[i] * 100));
+		BSP_LCD_DisplayStringAt(INPUT_BOX_X_OUTER + INPUT_BOX_WIDTH + 5,
+					INPUT_BOX_Y_OUTER + 35 + i * 13,
+					(uint8_t *)buff, LEFT_MODE);
+	}
+}
+
 void DrawTouchInput(void)
 {
 	static const uint32_t dot_radius = TOUCH_DOT_RADIUS;
 	static uint32_t x = 0, y = 0;
+	float *output_array;
 
 	BSP_TS_GetState(&TS_State);
 
@@ -232,9 +259,12 @@ void DrawTouchInput(void)
 		} else if (RunButtonPressed(x, y)) {
 			printf("Save image\n");
 			SaveInputImage();
-			prev_value = loop((uint8_t *)NNInputImage,
-					  INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE);
+			output_array =
+				loop((uint8_t *)NNInputImage,
+				     INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE);
+			prev_value = determine_char(output_array);
 			DrawInputScreen();
+			printPercentages(output_array);
 		}
 	}
 }

@@ -37,22 +37,8 @@ void setup()
     mnist_init();
 }
 
-char determine_char(float* out_array)
-{
-    int index = 0;
-    float max_val = out_array[index];
-
-    for(int i = 1; i < 10; i++)
-        if(out_array[i] > max_val){
-            index = i;
-            max_val = out_array[i];
-        }
-
-    return (char) index + 48;
-}
-
 // The name of this function is important for Arduino compatibility.
-char loop(uint8_t *img, uint32_t size)
+float *loop(uint8_t *img, uint32_t size)
 {
 	static TfLiteStatus invoke_status;
 	// Place our calculated x value in the model's input tensor
@@ -67,7 +53,6 @@ char loop(uint8_t *img, uint32_t size)
     volatile size_t output_size = mnist_output_size();
     volatile const int *output_dims = mnist_output_dims();
     volatile auto output_array = &tflite::GetTensorData<float>(mnist_output())[0];
-    volatile char ret = determine_char(output_array);
-    return (char)ret;
+    return output_array;
 	// return (char)output->data.f[0] + 48;
 }
