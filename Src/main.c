@@ -37,6 +37,7 @@ PUTCHAR_PROTOTYPE
 	return ch;
 }
 
+#define TOUCH_DOT_RADIUS 8
 #define INPUT_IMAGE_SIZE 28
 #define INPUT_BOX_THICKNESS 2
 #define INPUT_IMAGE_SIZE_PIXEL 224
@@ -63,7 +64,7 @@ static TS_StateTypeDef TS_State;
 static uint16_t TSInputImage[INPUT_IMAGE_SIZE_PIXEL][INPUT_IMAGE_SIZE_PIXEL] = {
 	0
 };
-static uint8_t NNInputImage[INPUT_IMAGE_SIZE * INPUT_IMAGE_SIZE];
+static uint8_t NNInputImage[INPUT_IMAGE_SIZE][INPUT_IMAGE_SIZE] = { 0 };
 static const uint32_t image_size = INPUT_IMAGE_SIZE;
 static const uint32_t image_size_pixel = INPUT_IMAGE_SIZE_PIXEL;
 
@@ -97,26 +98,19 @@ void ShrinkImage(void)
 
 	for (int y = 0; y < image_size; y++)
 		for (int x = 0; x < image_size; x++) {
-			TSInputImage[y][x] =
+			NNInputImage[y][x] =
 				AverageImageBlock(scale_factor, x, y);
 		}
 }
 
-void ConvertGStoTrueColor(void)
+uint8_t ConvertHighColorToGS(uint16_t pixel)
 {
-	static uint16_t tmp_pixel;
-	static const int divisor = 256 / 32;
-	for (int y = 0; y < image_size; y++)
-		for (int x = 0; x < image_size; x++) {
-			tmp_pixel = TSInputImage[y][x];
-			tmp_pixel = (((((tmp_pixel >> 11) & 0x1F) +
-				       ((tmp_pixel >> 5) & 0x1F) +
-				       (tmp_pixel & 0x1F) + 3) /
-				      3 * divisor) -
-				     1) &
-				    0xFF;
-			TSInputImage[y][x] = tmp_pixel;
-		}
+    uint8_t r = pixel >> 11 & 0x1F;
+    uint8_t g = pixel >> 5 & 0x3F;
+    uint8_t b = pixel & 0x1F;
+    uint8_t luminance = (r + g + b) / 3;
+    uint8_t gs = luminance * (255 / 41.0);
+    return gs;
 }
 
 static void SendImageUART(void)
@@ -125,7 +119,7 @@ static void SendImageUART(void)
 	printf("**********IMAGE START**********\n");
 	for (int i = 0; i < image_size; i++) {
 		for (int j = 0; j < image_size; j++) {
-			buffer[j * 2] = TSInputImage[i][j];
+			buffer[j * 2] = NNInputImage[i][j];
 			buffer[j * 2 + 1] = ' ';
 		}
 		printf("%s\n", buffer);
@@ -133,12 +127,12 @@ static void SendImageUART(void)
 	printf("**********IMAGE STOP**********\n");
 }
 
-static void DrawShrunkImage(void)
+static void DrawShrunkImage(int x, int y)
 {
 	BSP_LCD_Clear(LCD_COLOR_WHITE);
 	for (int i = 0; i < INPUT_IMAGE_SIZE; i++)
 		for (int j = 0; j < INPUT_IMAGE_SIZE; j++)
-			BSP_LCD_DrawPixel(j, i, TSInputImage[i][j]);
+			BSP_LCD_DrawPixel(x + j, y + i, NNInputImage[i][j]);
 }
 
 static void SaveInputImage(void)
@@ -147,22 +141,26 @@ static void SaveInputImage(void)
 	TSInputImage[0][0] = 1;
 	for (int y = 0; y < image_size_pixel; y++) {
 		for (int x = 0; x < image_size_pixel; x++) {
-			TSInputImage[y][x] =
-				BSP_LCD_ReadPixel(x + margin, y + margin);
+			TSInputImage[y][x] = ConvertHighColorToGS(
+				BSP_LCD_ReadPixel(x + margin, y + margin));
 		}
 	}
 
 	ShrinkImage();
 
-	DrawShrunkImage();
+	/** ConvertGStoTrueColor(); */
 
-	ConvertGStoTrueColor();
+	DrawShrunkImage(BSP_LCD_GetXSize() / 2 - INPUT_IMAGE_SIZE / 2,
+			BSP_LCD_GetYSize() / 2 - INPUT_IMAGE_SIZE / 2);
+	BSP_LCD_DisplayStringAt(BSP_LCD_GetXSize() / 4,
+				BSP_LCD_GetYSize() / 2 - 40,
+				(uint8_t *)"RUNNING", LEFT_MODE);
 
 	SendImageUART();
 
-	for (int i = 0; i < INPUT_IMAGE_SIZE; i++)
-		memcpy(&NNInputImage[i], &TSInputImage[i],
-		       INPUT_IMAGE_SIZE * sizeof(uint8_t));
+	/** for (int i = 0; i < INPUT_IMAGE_SIZE; i++) */
+	/**     memcpy(&NNInputImage[i], &TSInputImage[i], */
+	/**            INPUT_IMAGE_SIZE * sizeof(uint8_t)); */
 }
 
 uint8_t RunButtonPressed(uint32_t x, uint32_t y)
@@ -206,20 +204,21 @@ void DrawInputScreen(void)
 	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
 	BSP_LCD_DisplayStringAt(RUN_BOX_X + 20, RUN_BOX_Y + 12,
 				(uint8_t *)"RUN", LEFT_MODE);
-	if (prev_value != -1){
-		BSP_LCD_DisplayStringAt(INPUT_BOX_X_OUTER + INPUT_BOX_WIDTH + 10,
-					INPUT_BOX_Y_OUTER, (uint8_t *)"RESULT",
-					LEFT_MODE);
-        char buf[2];
-        sprintf(buf, "%c", prev_value);
-        BSP_LCD_DisplayStringAt(INPUT_BOX_X_OUTER + INPUT_BOX_WIDTH + 35,
-                INPUT_BOX_Y_OUTER + 15, (uint8_t *)buf, LEFT_MODE);
-    }
+	if (prev_value != -1) {
+		BSP_LCD_DisplayStringAt(
+			INPUT_BOX_X_OUTER + INPUT_BOX_WIDTH + 10,
+			INPUT_BOX_Y_OUTER, (uint8_t *)"RESULT", LEFT_MODE);
+		char buf[2];
+		sprintf(buf, "%c", prev_value);
+		BSP_LCD_DisplayStringAt(
+			INPUT_BOX_X_OUTER + INPUT_BOX_WIDTH + 35,
+			INPUT_BOX_Y_OUTER + 15, (uint8_t *)buf, LEFT_MODE);
+	}
 }
 
 void DrawTouchInput(void)
 {
-	static const uint32_t dot_radius = 2;
+	static const uint32_t dot_radius = TOUCH_DOT_RADIUS;
 	static uint32_t x = 0, y = 0;
 
 	BSP_TS_GetState(&TS_State);
@@ -257,11 +256,6 @@ void StartDefaultTask(void const *argument)
 	}
 }
 
-/**
-* @brief Function implementing the blinkTaskHandle thread.
-* @param argument: Not used
-* @retval None
-*/
 void blink(void const *argument)
 {
 	int count = 0;
@@ -287,10 +281,6 @@ void blink(void const *argument)
 			HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin,
 					  GPIO_PIN_SET);
 			break;
-		case 3:
-			/** HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, */
-			/**           GPIO_PIN_SET); */
-			break;
 		case 5:
 			HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin,
 					  GPIO_PIN_RESET);
@@ -303,10 +293,6 @@ void blink(void const *argument)
 			HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin,
 					  GPIO_PIN_RESET);
 			break;
-		case 8:
-			/** HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, */
-			/**           GPIO_PIN_RESET); */
-			break;
 		default:
 			break;
 		}
@@ -317,45 +303,14 @@ void blink(void const *argument)
 
 int main(void)
 {
-	/* MCU Configuration--------------------------------------------------------*/
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
 
-	/* Initialize the LCD */
 	BSP_LCD_Init();
-
-	/* Enable the LCD */
 	BSP_LCD_DisplayOn();
-
-	/* Clear the LCD Background layer */
 	BSP_LCD_Clear(LCD_COLOR_WHITE);
-
-	/** Touchscreen_Calibration(); */
-	/** BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()); */
-
 	BSP_LCD_Clear(LCD_COLOR_WHITE);
-	/** BSP_LCD_SetTextColor(LCD_COLOR_DARKRED); */
-	/** BSP_LCD_SetFont(&Font8); */
-	/** BSP_LCD_DisplayStringAt(210, (BSP_LCD_GetYSize() - 55), */
-	/**             (uint8_t *)hello_str, LEFT_MODE); */
-
-	/** Touchscreen_Calibration(); */
 	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 
-	/*Link the SD Card disk I/O driver ###################################*/
-	/** if (FATFS_LinkDriver(&SD_Driver, SDPath) != 0) { */
-	/**     Error_Handler(); */
-	/** } */
-
-	/* Create a FAT file system (format) on the logical drive */
-	/** f_mkfs((TCHAR const *)SDPath, FM_ANY, 0, buffer, sizeof(buffer)); */
-
-	/*##-4- Register the file system object to the FatFs module ################*/
-	/** if (f_mount(&SDFatFs, (TCHAR const *)SDPath, 0) != FR_OK) { */
-	/**     Error_Handler(); */
-	/** } */
-
-	/* Configure the system clock */
 	SystemClock_Config();
 
 	UartHandle.Instance = USARTx;
@@ -390,10 +345,6 @@ int main(void)
 	}
 }
 
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
 void SystemClock_Config(void)
 {
 	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
@@ -528,10 +479,6 @@ static void MX_GPIO_Init(void)
 	HAL_GPIO_Init(SW1_GPIO_Port, &GPIO_InitStruct);
 }
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
 void Error_Handler(void)
 {
 	while (1) {
@@ -539,13 +486,6 @@ void Error_Handler(void)
 }
 
 #ifdef USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
 }
