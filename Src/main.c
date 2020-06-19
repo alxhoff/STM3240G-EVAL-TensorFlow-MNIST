@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include "main.h"
@@ -93,7 +94,7 @@ uint16_t AverageImageBlock(uint32_t block_size, uint32_t x, uint32_t y)
 		(((ret[2] / (block_size * block_size)) & 0x1F) << 11));
 }
 
-void ShrinkImage(void)
+void PreprocessImage(void)
 {
 	uint8_t scale_factor = image_size_pixel / image_size;
 
@@ -114,18 +115,36 @@ uint8_t ConvertHighColorToGS(uint16_t pixel)
 	return gs;
 }
 
-static void SendImageUART(void)
+#define SEND_HASH_IMAGE 0b1
+
+static void SendImageUART(void *image, size_t pixel_size, size_t image_size,
+			  char flags)
 {
-	char buffer[INPUT_IMAGE_SIZE * 2 + 1] = { '\0' };
-	printf("**********IMAGE START**********\n");
+	char *buffer = (char *)pvPortMalloc((image_size + 3) * sizeof(char));
+	memset(buffer, 0, (image_size + 3) * sizeof(char));
+	printf("**********IMAGE START**********\n\r");
 	for (int i = 0; i < image_size; i++) {
-		for (int j = 0; j < image_size; j++) {
-			buffer[j * 2] = NNInputImage[i][j];
-			buffer[j * 2 + 1] = ' ';
-		}
-		printf("%s\n", buffer);
+		buffer[0] = '|';
+		for (int j = 0; j < image_size; j++)
+			if (flags & 0b1)
+				buffer[j + 1] = (*((char *)image +
+						   (i * image_size + j) *
+							   pixel_size) == 255) ?
+							'.' :
+							'#';
+			else
+				buffer[j + 1] = (*((char *)image +
+						   (i * image_size + j) *
+							   pixel_size) == 255) ?
+							'.' :
+							*((char *)image +
+							  (i + image_size + j) *
+								  pixel_size) % 26 + 65;
+		buffer[image_size] = '|';
+		printf("%s\n\r", buffer);
 	}
-	printf("**********IMAGE STOP**********\n");
+	printf("**********IMAGE STOP**********\n\r");
+	vPortFree(buffer);
 }
 
 static void DrawShrunkImage(int x, int y)
@@ -147,9 +166,10 @@ static void SaveInputImage(void)
 		}
 	}
 
-	ShrinkImage();
+	/** SendImageUART((void *)TSInputImage, sizeof(uint16_t), */
+	/**           INPUT_IMAGE_SIZE_PIXEL); */
 
-	/** ConvertGStoTrueColor(); */
+	PreprocessImage();
 
 	DrawShrunkImage(BSP_LCD_GetXSize() / 2 - INPUT_IMAGE_SIZE / 2,
 			BSP_LCD_GetYSize() / 2 - INPUT_IMAGE_SIZE / 2);
@@ -157,11 +177,7 @@ static void SaveInputImage(void)
 				BSP_LCD_GetYSize() / 2 - 40,
 				(uint8_t *)"RUNNING", LEFT_MODE);
 
-	SendImageUART();
-
-	/** for (int i = 0; i < INPUT_IMAGE_SIZE; i++) */
-	/**     memcpy(&NNInputImage[i], &TSInputImage[i], */
-	/**            INPUT_IMAGE_SIZE * sizeof(uint8_t)); */
+	SendImageUART((void *)NNInputImage, sizeof(char), INPUT_IMAGE_SIZE, 0);
 }
 
 uint8_t RunButtonPressed(uint32_t x, uint32_t y)
@@ -257,7 +273,7 @@ void DrawTouchInput(void)
 		if (DrawInBox(x, y, dot_radius)) {
 			BSP_LCD_FillCircle(x, y, dot_radius);
 		} else if (RunButtonPressed(x, y)) {
-			printf("Save image\n");
+			printf("Save image\n\r");
 			SaveInputImage();
 			output_array =
 				loop((uint8_t *)NNInputImage,
@@ -278,7 +294,7 @@ void StartDefaultTask(void const *argument)
 {
 	DrawInputScreen();
 
-	printf("Started\n");
+	printf("Started\n\r");
 	setup();
 	for (;;) {
 		DrawTouchInput();
@@ -357,7 +373,7 @@ int main(void)
 		Error_Handler();
 	}
 
-	printf("UART online\n");
+	printf("UART online\n\r");
 
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();

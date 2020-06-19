@@ -40,19 +40,12 @@ void setup()
 // The name of this function is important for Arduino compatibility.
 float *loop(uint8_t *img, uint32_t size)
 {
-	static TfLiteStatus invoke_status;
-	// Place our calculated x value in the model's input tensor
 	for (uint32_t i = 0; i < size; i++)
         tflite::GetTensorData<float>(mnist_input())[0] = img[i];
 
-	// Run inference, and report any error
     mnist_invoke();
 
-	// Read the predicted y value from the model's output tensor
-    volatile int output_dims_len = mnist_output_dims_len();
-    volatile size_t output_size = mnist_output_size();
-    volatile const int *output_dims = mnist_output_dims();
-    volatile auto output_array = &tflite::GetTensorData<float>(mnist_output())[0];
+    auto output_array = &tflite::GetTensorData<float>(mnist_output())[0];
     return output_array;
 	// return (char)output->data.f[0] + 48;
 }
