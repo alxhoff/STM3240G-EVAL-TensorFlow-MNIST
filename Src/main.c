@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "ff_gen_drv.h"
+#include "sd_diskio_dma_rtos.h"
 #include "main.h"
 #include "cmsis_os.h"
 #include "main_functions.h"
@@ -24,6 +26,11 @@ osThreadId defaultTaskHandle;
 osThreadId blinkTaskHandle;
 
 UART_HandleTypeDef UartHandle;
+
+FATFS SDFatFs;
+FIL MyFile;
+char SDPath[4];
+static uint8_t buffer[_MAX_SS];
 
 /**
   * @brief  Retargets the C library printf function to the USART.
@@ -69,6 +76,61 @@ static uint16_t TSInputImage[INPUT_IMAGE_SIZE_PIXEL][INPUT_IMAGE_SIZE_PIXEL] = {
 static uint8_t NNInputImage[INPUT_IMAGE_SIZE][INPUT_IMAGE_SIZE] = { 0 };
 static const uint32_t image_size = INPUT_IMAGE_SIZE;
 static const uint32_t image_size_pixel = INPUT_IMAGE_SIZE_PIXEL;
+
+int FSInit(void)
+{
+    if(FATFS_LinkDriver(&SD_Driver, (TCHAR *)SDPath) != 0)
+        return -1;
+
+    printf("FatFS driver linked\n\r");
+
+    if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 0) != FR_OK)
+        return -1;
+
+    printf("FS mounted\n\r");
+
+    if(f_mkfs((TCHAR const*)SDPath, FM_ANY, 0, buffer, sizeof(buffer)) != FR_OK)
+        return -1;
+
+    printf("File system created\n\r");
+
+    return 0;
+}
+
+int TestFS(void)
+{
+    uint32_t byteswritten, bytesread;
+    char *test_text = "This is the test text 1234";
+    char read_text[50];
+
+    if(f_open(&MyFile, "TEST.txt", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK){
+        printf("Open file failed\n\r");
+        return-1;
+    }
+
+    if(f_write(&MyFile, test_text, sizeof(test_text), (void *)&byteswritten) != FR_OK || (byteswritten == 0)){
+        printf("Write to file failed \n\r");
+        return -1;
+    }
+
+    f_close(&MyFile);
+
+    printf("Wrote %lu bytes to file", byteswritten);
+
+
+    if(f_open(&MyFile, "TEST.txt", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+        return-1;
+
+    if(f_read(&MyFile, read_text, sizeof(read_text), (UINT*)&bytesread) != FR_OK || (bytesread == 0))
+        return -1;
+
+    if(bytesread != byteswritten)
+        return -1;
+
+    printf("Read %lu bytes from file", bytesread);
+
+    return 0;
+}
 
 uint16_t AverageImageBlock(uint32_t block_size, uint32_t x, uint32_t y)
 {
@@ -349,6 +411,8 @@ void blink(void const *argument)
 
 int main(void)
 {
+    int ret;
+
 	HAL_Init();
 
 	BSP_LCD_Init();
@@ -377,6 +441,14 @@ int main(void)
 
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
+
+    if((ret = FSInit()))
+        printf("FS init failed\n\r");
+
+    printf("FS Init: %d\n\r", ret);
+
+    if(TestFS())
+        printf("Test FS failed\n\r");
 
 	osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 1000);
 	defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);

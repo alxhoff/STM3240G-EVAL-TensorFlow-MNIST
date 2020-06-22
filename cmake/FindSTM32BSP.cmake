@@ -13,6 +13,7 @@ IF(STM32_FAMILY STREQUAL "F4")
 		SET(BSP_SRC stm32f429i_discovery.c)
 	ENDIF()
     IF(STM_BOARD STREQUAL "STM324xG_EVAL")
+        ADD_DEFINITIONS(-DUSE_STM324xG_EVAL)
         SET(BSP_COMPONENTS 
             lcd 
             camera 
@@ -91,6 +92,7 @@ FOREACH(file ${BSP_SRC})
 		PATH_SUFFIXES ${subfolder}
 		CMAKE_FIND_ROOT_PATH_BOTH
 		)
+	MESSAGE(STATUS "BSP file is " ${BSP_${file}_FILE})
 	LIST(APPEND STM32BSP_SOURCES ${BSP_${file}_FILE})
 ENDFOREACH()
 

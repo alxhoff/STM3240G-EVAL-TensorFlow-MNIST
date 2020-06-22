@@ -33,9 +33,8 @@ ELSEIF(STM32_FAMILY STREQUAL "F3")
     SET(LL_PREFIX stm32f3xx_)
 
 ELSEIF(STM32_FAMILY STREQUAL "F4")
-    SET(LL_COMPONENTS	adc bus cortex crc dac dma2d dma exti fmc gpio i2c i2s iwdg
-						lptim pwr rcc rng rtc spi system tim usart usb utils wwdg 
-                        fsmc sdmmc)
+    SET(LL_COMPONENTS	adc bus cortex crc dac dma2d dma exti fmc fsmc gpio i2c iwdg
+						lptim pwr rcc rng rtc sdmmc spi system tim usart usb utils wwdg)
 
     SET(LL_REQUIRED_COMPONENTS bus cortex pwr rcc system utils)
 
@@ -48,6 +47,14 @@ ELSEIF(STM32_FAMILY STREQUAL "F7")
     SET(LL_REQUIRED_COMPONENTS bus cortex pwr rcc system utils)
 
     SET(LL_PREFIX stm32f7xx_)
+	
+ELSEIF(STM32_FAMILY STREQUAL "H7")
+    SET(LL_COMPONENTS	adc bus cortex crc dac dma2d dma exti gpio i2c i2s iwdg
+						lptim pwr rcc rng rtc spi system tim usart usb utils wwdg)
+
+    SET(LL_REQUIRED_COMPONENTS bus cortex pwr rcc system utils)
+
+    SET(LL_PREFIX stm32h7xx_)
 
 ELSEIF(STM32_FAMILY STREQUAL "L0")
     SET(LL_COMPONENTS	adc bus comp cortex crc crs dac dma exti gpio i2c i2s
@@ -76,7 +83,9 @@ ELSEIF(STM32_FAMILY STREQUAL "L4")
 
 ENDIF()
 
-ADD_DEFINITIONS(-DUSE_FULL_LL_DRIVER)
+IF(NOT NO_STM32LL_FULL_DRIVER)
+    ADD_DEFINITIONS(-DUSE_FULL_LL_DRIVER)
+ENDIF()
 
 FOREACH(cmp ${LL_REQUIRED_COMPONENTS})
 	LIST(FIND STM32LL_FIND_COMPONENTS ${cmp} STM32LL_FOUND_INDEX)
