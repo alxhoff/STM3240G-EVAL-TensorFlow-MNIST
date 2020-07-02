@@ -4,10 +4,7 @@
 #include "ff_gen_drv.h"
 #include "sd_diskio_dma_rtos.h"
 #include "main.h"
-#include "cmsis_os.h"
 #include "main_functions.h"
-#include "constants.h"
-#include "color.h"
 
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
@@ -37,14 +34,11 @@ static uint8_t buffer[_MAX_SS];
   * @param  None
   * @retval None
   */
-PUTCHAR_PROTOTYPE
-{
-	/* Place your implementation of fputc here */
-	/* e.g. write a character to the EVAL_COM1 and Loop until the end of transmission */
-	HAL_UART_Transmit(&UartHandle, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
-
-	return ch;
-}
+/** PUTCHAR_PROTOTYPE */
+/** { */
+/**     HAL_UART_Transmit(&UartHandle, (uint8_t *)&ch, 1, HAL_MAX_DELAY); */
+/**     return ch; */
+/** } */
 
 #define TOUCH_DOT_RADIUS 8
 #define INPUT_IMAGE_SIZE 28
@@ -104,6 +98,7 @@ int TestFS(void)
     char read_text[50];
 
     if(f_open(&MyFile, "TEST.txt", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK){
+
         printf("Open file failed\n\r");
         return-1;
     }

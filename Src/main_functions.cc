@@ -20,7 +20,6 @@ using namespace std;
 #include "tensorflow/lite/kernels/internal/tensor_ctypes.h"
 
 #include "main_functions.h"
-#include "constants.h"
 
 extern void mnist_init();
 extern void mnist_invoke();
@@ -47,5 +46,4 @@ float *loop(uint8_t *img, uint32_t size)
 
     auto output_array = &tflite::GetTensorData<float>(mnist_output())[0];
     return output_array;
-	// return (char)output->data.f[0] + 48;
 }
