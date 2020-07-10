@@ -1,8 +1,5 @@
-#include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "ff_gen_drv.h"
-#include "sd_diskio_dma_rtos.h"
 #include "main.h"
 #include "main_functions.h"
 
@@ -24,21 +21,17 @@ osThreadId blinkTaskHandle;
 
 UART_HandleTypeDef UartHandle;
 
-FATFS SDFatFs;
+FATFS USBDISKFatFs;
 FIL MyFile;
-char SDPath[4];
-static uint8_t buffer[_MAX_SS];
+char USBDISKPath[4];
+USBH_HandleTypeDef hUSB_Host;
 
-/**
-  * @brief  Retargets the C library printf function to the USART.
-  * @param  None
-  * @retval None
-  */
-/** PUTCHAR_PROTOTYPE */
-/** { */
-/**     HAL_UART_Transmit(&UartHandle, (uint8_t *)&ch, 1, HAL_MAX_DELAY); */
-/**     return ch; */
-/** } */
+typedef enum {
+    DISCONNECTION_EVENT=1,
+    CONNECTION_EVENT,
+}MSC_ApplicationTypeDef;
+
+osMessageQId AppliEvent;
 
 #define TOUCH_DOT_RADIUS 8
 #define INPUT_IMAGE_SIZE 28
@@ -71,22 +64,41 @@ static uint8_t NNInputImage[INPUT_IMAGE_SIZE][INPUT_IMAGE_SIZE] = { 0 };
 static const uint32_t image_size = INPUT_IMAGE_SIZE;
 static const uint32_t image_size_pixel = INPUT_IMAGE_SIZE_PIXEL;
 
+static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id)
+{
+    switch(id){
+        case HOST_USER_SELECT_CONFIGURATION:
+            break;
+        case HOST_USER_DISCONNECTION:
+            osMessagePut(AppliEvent, DISCONNECTION_EVENT, 0);
+            break;
+        case HOST_USER_CLASS_ACTIVE:
+            osMessagePut(AppliEvent, CONNECTION_EVENT, 0);
+            break;
+        default:
+            break;
+    }
+}
+
 int FSInit(void)
 {
-    if(FATFS_LinkDriver(&SD_Driver, (TCHAR *)SDPath) != 0)
+    FRESULT res;
+    
+    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0)
         return -1;
 
     printf("FatFS driver linked\n\r");
 
-    if(f_mount(&SDFatFs, (TCHAR const*)SDPath, 0) != FR_OK)
+    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);
+
+    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);
+
+    USBH_Start(&hUSB_Host);
+
+    if(f_mount(&USBDISKFatFs, (TCHAR const *)USBDISKPath, 0) != FR_OK)
         return -1;
 
-    printf("FS mounted\n\r");
-
-    if(f_mkfs((TCHAR const*)SDPath, FM_ANY, 0, buffer, sizeof(buffer)) != FR_OK)
-        return -1;
-
-    printf("File system created\n\r");
+    printf("FS init done\n\r");
 
     return 0;
 }
@@ -409,14 +421,14 @@ int main(void)
     int ret;
 
 	HAL_Init();
+	SystemClock_Config();
+
 
 	BSP_LCD_Init();
 	BSP_LCD_DisplayOn();
 	BSP_LCD_Clear(LCD_COLOR_WHITE);
 	BSP_LCD_Clear(LCD_COLOR_WHITE);
 	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
-
-	SystemClock_Config();
 
 	UartHandle.Instance = USARTx;
 	UartHandle.Init.BaudRate = 9600;
@@ -450,6 +462,9 @@ int main(void)
 
 	osThreadDef(blinkTaskHandle, blink, osPriorityNormal, 0, 256);
 	blinkTaskHandle = osThreadCreate(osThread(blinkTaskHandle), NULL);
+
+    osMessageQDef(osqueue, 1, uint16_t);
+    AppliEvent = osMessageCreate(osMessageQ(osqueue), NULL);
 
 	/* Start scheduler */
 	osKernelStart();

@@ -1,17 +1,13 @@
-/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * File Name          : freertos.c
-  * Description        : Code for freertos applications
+  * @file    FatFs/FatFs_USBDisk_RTOS/Inc/usbh_conf.h
+  * @author  MCD Application Team
+  * @brief   General low level driver configuration
   ******************************************************************************
-  * This notice applies to any and all portions of this file
-  * that are not between comment pairs USER CODE BEGIN and
-  * USER CODE END. Other portions of this file, whether 
-  * inserted by the user or by software development tools
-  * are owned by their respective copyright owners.
+  * @attention
   *
-  * Copyright (c) 2020 STMicroelectronics International N.V. 
-  * All rights reserved.
+  * <h2><center>&copy; Copyright (c) 2017 STMicroelectronics International N.V. 
+  * All rights reserved.</center></h2>
   *
   * Redistribution and use in source and binary forms, with or without 
   * modification, are permitted, provided that the following conditions are met:
@@ -46,63 +42,71 @@
   *
   ******************************************************************************
   */
-/* USER CODE END Header */
+/* Define to prevent recursive inclusion -------------------------------------*/
+#ifndef __USBH_CONF_H
+#define __USBH_CONF_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "FreeRTOS.h"
-#include "task.h"
-#include "queue.h"
-#include "main.h"
+#include "stm32f4xx.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */     
+/* Exported types ------------------------------------------------------------*/
+#define USBH_MAX_NUM_ENDPOINTS                2
+#define USBH_MAX_NUM_INTERFACES               2
+#define USBH_MAX_NUM_CONFIGURATION            1
+#define USBH_MAX_NUM_SUPPORTED_CLASS          1
+#define USBH_KEEP_CFG_DESCRIPTOR              0
+#define USBH_MAX_SIZE_CONFIGURATION           0x200
+#define USBH_MAX_DATA_BUFFER                  0x200
+#define USBH_DEBUG_LEVEL                      0
+#define USBH_USE_OS                           1
+    
+/* Exported constants --------------------------------------------------------*/
+/* Exported macro ------------------------------------------------------------*/
+/* CMSIS OS macros */   
+#if (USBH_USE_OS == 1)
+  #include "cmsis_os.h"
+  #define   USBH_PROCESS_PRIO          osPriorityNormal
+  #define   USBH_PROCESS_STACK_SIZE    (8 * configMINIMAL_STACK_SIZE)
+#endif      
 
-/* USER CODE END Includes */
+/* Memory management macros */    
+#define USBH_malloc               malloc
+#define USBH_free                 free
+#define USBH_memset               memset
+#define USBH_memcpy               memcpy
+    
+/* DEBUG macros */   
+#if (USBH_DEBUG_LEVEL > 0)
+#define USBH_UsrLog(...)   printf(__VA_ARGS__);\
+                           printf("\n");
+#else
+#define USBH_UsrLog(...)   
+#endif 
+                            
+                            
+#if (USBH_DEBUG_LEVEL > 1)
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
+#define USBH_ErrLog(...)   printf("ERROR: ") ;\
+                           printf(__VA_ARGS__);\
+                           printf("\n");
+#else
+#define USBH_ErrLog(...)   
+#endif 
+                                                      
+#if (USBH_DEBUG_LEVEL > 2)                         
+#define  USBH_DbgLog(...)   printf("DEBUG : ") ;\
+                            printf(__VA_ARGS__);\
+                            printf("\n");
+#else
+#define USBH_DbgLog(...)                         
+#endif
 
-/* USER CODE END PTD */
+/* Exported functions ------------------------------------------------------- */
 
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
-/* USER CODE BEGIN Variables */
-
-/* USER CODE END Variables */
-
-/* Private function prototypes -----------------------------------------------*/
-/* USER CODE BEGIN FunctionPrototypes */
-   
-/* USER CODE END FunctionPrototypes */
-
-/* GetIdleTaskMemory prototype (linked to static allocation support) */
-void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize );
-
-/* USER CODE BEGIN GET_IDLE_TASK_MEMORY */
-static StaticTask_t xIdleTaskTCBBuffer;
-static StackType_t xIdleStack[configMINIMAL_STACK_SIZE];
-  
-void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize )
-{
-  *ppxIdleTaskTCBBuffer = &xIdleTaskTCBBuffer;
-  *ppxIdleTaskStackBuffer = &xIdleStack[0];
-  *pulIdleTaskStackSize = configMINIMAL_STACK_SIZE;
-  /* place for user code */
-}                   
-/* USER CODE END GET_IDLE_TASK_MEMORY */
-
-/* Private application code --------------------------------------------------*/
-/* USER CODE BEGIN Application */
-     
-/* USER CODE END Application */
+#endif /* __USB_CONF_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+

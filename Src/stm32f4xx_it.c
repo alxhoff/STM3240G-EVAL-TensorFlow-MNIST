@@ -29,7 +29,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
-extern SD_HandleTypeDef uSdHandle;
+extern HCD_HandleTypeDef hhcd;
 
 /* USER CODE END TD */
 
@@ -183,19 +183,13 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
-void BSP_SD_DMA_Rx_IRQHandler(void)
+#ifdef USE_USB_FS
+void OTG_FS_URQHandler(void)
+#else 
+void OTG_HS_IRQHandler(void)
+#endif 
 {
-    HAL_DMA_IRQHandler(uSdHandle.hdmarx);
-}
-
-void BSP_SD_DMA_Tx_IRQHandler(void)
-{
-    HAL_DMA_IRQHandler(uSdHandle.hdmatx);
-}
-
-void SDIO_IRQHandler(void)
-{
-    HAL_SD_IRQHandler(&uSdHandle);
+    HAL_HCD_IRQHandler(&hhcd);
 }
 
 /* USER CODE END 1 */
