@@ -27,9 +27,9 @@ char USBDISKPath[4];
 USBH_HandleTypeDef hUSB_Host;
 
 typedef enum {
-    DISCONNECTION_EVENT=1,
-    CONNECTION_EVENT,
-}MSC_ApplicationTypeDef;
+	DISCONNECTION_EVENT = 1,
+	CONNECTION_EVENT,
+} MSC_ApplicationTypeDef;
 
 osMessageQId AppliEvent;
 
@@ -66,77 +66,100 @@ static const uint32_t image_size_pixel = INPUT_IMAGE_SIZE_PIXEL;
 
 static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id)
 {
-    switch(id){
-        case HOST_USER_SELECT_CONFIGURATION:
-            break;
-        case HOST_USER_DISCONNECTION:
-            osMessagePut(AppliEvent, DISCONNECTION_EVENT, 0);
-            break;
-        case HOST_USER_CLASS_ACTIVE:
-            osMessagePut(AppliEvent, CONNECTION_EVENT, 0);
-            break;
-        default:
-            break;
-    }
+	switch (id) {
+	case HOST_USER_SELECT_CONFIGURATION:
+		break;
+	case HOST_USER_DISCONNECTION:
+		osMessagePut(AppliEvent, DISCONNECTION_EVENT, 0);
+		f_mount(NULL, (TCHAR const *)"", 0);
+		break;
+	case HOST_USER_CLASS_ACTIVE:
+		if (f_mount(&USBDISKFatFs, (TCHAR const *)USBDISKPath, 0) != FR_OK) {
+			Error_Handler();
+		} else
+			osMessagePut(AppliEvent, CONNECTION_EVENT, 0);
+		break;
+	default:
+		break;
+	}
 }
 
 int FSInit(void)
 {
-    FRESULT res;
-    
-    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0)
-        return -1;
+	FRESULT res;
 
-    printf("FatFS driver linked\n\r");
+	if (USBH_Init(&hUSB_Host, USBH_UserProcess, 0) != USBH_OK) {
+		printf("USB init failed\n\r");
+		return -1;
+	}
 
-    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);
+	if (USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS) != USBH_OK) {
+		printf("USB register class failed\n\r");
+		return -1;
+	}
 
-    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);
+	if (USBH_Start(&hUSB_Host) != USBH_OK) {
+		printf("USB start failed\n\r");
+		return -1;
+	}
+	
+    if (FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0)
+		return -1;
 
-    USBH_Start(&hUSB_Host);
+	printf("FS init done\n\r");
 
-    if(f_mount(&USBDISKFatFs, (TCHAR const *)USBDISKPath, 0) != FR_OK)
-        return -1;
-
-    printf("FS init done\n\r");
-
-    return 0;
+	return 0;
 }
 
 int TestFS(void)
 {
-    uint32_t byteswritten, bytesread;
-    char *test_text = "This is the test text 1234";
-    char read_text[50];
+	uint32_t byteswritten, bytesread;
+	char *test_text = "This is the test text 1234";
+	char read_text[50];
 
-    if(f_open(&MyFile, "TEST.txt", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK){
-
-        printf("Open file failed\n\r");
-        return-1;
-    }
-
-    if(f_write(&MyFile, test_text, sizeof(test_text), (void *)&byteswritten) != FR_OK || (byteswritten == 0)){
-        printf("Write to file failed \n\r");
-        return -1;
-    }
-
-    f_close(&MyFile);
-
-    printf("Wrote %lu bytes to file", byteswritten);
+	if (f_mount(&USBDISKFatFs, (TCHAR const *)USBDISKPath, 0) != FR_OK) {
+		printf("Could not mount USB\n\r");
+		return -1;
+	}
 
 
-    if(f_open(&MyFile, "TEST.txt", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
-        return-1;
+	if (f_open(&MyFile, "TEST.txt", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) {
+		printf("Open file failed\n\r");
+		return -1;
+	}
 
-    if(f_read(&MyFile, read_text, sizeof(read_text), (UINT*)&bytesread) != FR_OK || (bytesread == 0))
-        return -1;
+	if (f_write(&MyFile, test_text, sizeof(test_text),
+		    (void *)&byteswritten) != FR_OK ||
+	    (byteswritten == 0)) {
+		printf("Write to file failed \n\r");
+		return -1;
+	}
 
-    if(bytesread != byteswritten)
-        return -1;
+	f_close(&MyFile);
 
-    printf("Read %lu bytes from file", bytesread);
+	printf("Wrote %lu bytes to file", byteswritten);
 
-    return 0;
+	if (f_open(&MyFile, "TEST.txt", FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) {
+		printf("Could not open file to read\n\r");
+		return -1;
+	}
+
+	if (f_read(&MyFile, read_text, sizeof(read_text), (UINT *)&bytesread) !=
+		    FR_OK ||
+	    (bytesread == 0)) {
+		printf("Could not read from file\n\r");
+		return -1;
+	}
+
+	if (bytesread != byteswritten) {
+		printf("Bytes read (%u) doesn't equal bytes written (%u)\n\r",
+		       bytesread, byteswritten);
+		return -1;
+	}
+
+	printf("Read %lu bytes from file", bytesread);
+
+	return 0;
 }
 
 uint16_t AverageImageBlock(uint32_t block_size, uint32_t x, uint32_t y)
@@ -208,7 +231,9 @@ static void SendImageUART(void *image, size_t pixel_size, size_t image_size,
 							'.' :
 							*((char *)image +
 							  (i + image_size + j) *
-								  pixel_size) % 26 + 65;
+								  pixel_size) %
+									26 +
+								65;
 		buffer[image_size] = '|';
 		printf("%s\n\r", buffer);
 	}
@@ -418,17 +443,10 @@ void blink(void const *argument)
 
 int main(void)
 {
-    int ret;
+	int ret;
 
 	HAL_Init();
 	SystemClock_Config();
-
-
-	BSP_LCD_Init();
-	BSP_LCD_DisplayOn();
-	BSP_LCD_Clear(LCD_COLOR_WHITE);
-	BSP_LCD_Clear(LCD_COLOR_WHITE);
-	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 
 	UartHandle.Instance = USARTx;
 	UartHandle.Init.BaudRate = 9600;
@@ -446,25 +464,28 @@ int main(void)
 
 	printf("UART online\n\r");
 
+	BSP_LCD_Init();
+	BSP_LCD_DisplayOn();
+	BSP_LCD_Clear(LCD_COLOR_WHITE);
+	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
+
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
 
-    if((ret = FSInit()))
-        printf("FS init failed\n\r");
+	if ((ret = FSInit()))
+		printf("FS init failed %d\n\r", ret);
 
-    printf("FS Init: %d\n\r", ret);
+	if (TestFS())
+		printf("Test FS failed\n\r");
 
-    if(TestFS())
-        printf("Test FS failed\n\r");
-
-	osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 1000);
-	defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+	/** osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 1000); */
+	/** defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL); */
 
 	osThreadDef(blinkTaskHandle, blink, osPriorityNormal, 0, 256);
 	blinkTaskHandle = osThreadCreate(osThread(blinkTaskHandle), NULL);
 
-    osMessageQDef(osqueue, 1, uint16_t);
-    AppliEvent = osMessageCreate(osMessageQ(osqueue), NULL);
+	osMessageQDef(osqueue, 1, uint16_t);
+	AppliEvent = osMessageCreate(osMessageQ(osqueue), NULL);
 
 	/* Start scheduler */
 	osKernelStart();
